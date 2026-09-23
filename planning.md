@@ -130,7 +130,7 @@ Every comment where I hesitate for more than a few seconds gets logged in the `n
 
 ## 4. Data collection plan
 
-**Source:** r/NBA, public comments only. Four thread types, chosen deliberately because each over-produces a different label:
+**Source:** r/NBA, public comments only. Different thread types over-produce different labels, so I sample them deliberately rather than uniformly:
 
 | Thread type | Over-produces | Why I'm sampling it |
 |---|---|---|
@@ -139,9 +139,19 @@ Every comment where I hesitate for more than a few seconds gets logged in the `n
 | Daily Discussion Thread | `consensus_take`, `hot_take` | Low-stakes opinion trading, no specific game anchoring it |
 | Comments on news / `[Highlight]` posts | `hot_take` | Player-evaluation arguments, where contrarian takes live |
 
-**Collection window:** a single narrow window (roughly two weeks of in-season games) so that "r/NBA consensus" means one fixed thing across the dataset, per rule §3b.
+### Timing problem, and the revision it forced
 
-**Method:** manual copy-paste into the CSV. This is slower than scraping, but the spec is right that it keeps me close to the data, and I genuinely need to read each comment to label it anyway. Scraping would save me the paste and cost me the read.
+The plan above assumed an in-season collection window. **It isn't one.** The 2026–27 preseason doesn't tip until October 3 and opening night is October 20, so at the time of collection r/NBA has no game threads and no post-game threads at all — the two sources the table assigns to `reaction` and `stat_backed`. Discovering this before collecting rather than after is the entire reason for writing a plan down first.
+
+Two revisions, each scoped to the label it affects:
+
+**`consensus_take`, `hot_take`, `stat_backed` — collect from the current offseason window.** This turns out to be a strength rather than a compromise. Late-September r/NBA is dominated by media-day coverage, roster-move arguments, and season-preview power rankings, which is *more* argument-dense than a game thread, not less. Offseason discourse is almost entirely player evaluation with nothing happening on the court to point at, which is precisely the environment that produces bare assertions (`hot_take`), conventional wisdom (`consensus_take`), and the "actually, here are his splits" rebuttals (`stat_backed`). Ranking threads in particular attract statistically literate arguing.
+
+**`reaction` — allow a second, earlier window, and here is why that does not break §3b.** The frozen-window rule exists for exactly one purpose: to stabilize the `consensus_take` / `hot_take` boundary, which depends on what r/NBA believes at a moment in time. `reaction` has no claim in it by definition — it fails the strip test — so *there is no consensus for it to be measured against* and no drift for the freeze to protect it from. Reaction comments are therefore window-independent, and I can source them from a narrow archived window (a playoff or Finals series from the season just completed) without introducing the inconsistency §3b guards against.
+
+This is a real exception to a rule I wrote three sections ago, so I'm stating the limit precisely: **the exception covers `reaction` only.** Any comment from the archived window that turns out to carry a claim — which happens, since post-game threads mix screaming with analysis — gets discarded rather than labeled, because labeling it would mean judging last season's consensus against this season's frame. I'll flag those rows as `archived` in `source_thread_type` so the split is auditable afterward.
+
+**Method:** scripted collection of raw comments via [`tools/collect_reddit.py`](tools/collect_reddit.py), then hand-labeling every row. The assignment permits a scraping tool, and the tradeoff it warns about doesn't apply here: the script only removes the copy-paste, not the read. Labels come out of the scraper empty on purpose. I still read all 200 comments one at a time against the rules in §2 and §3, which is the step that actually matters, and the script buys me more time to do it.
 
 **Target distribution:** ~50 per label (25% each), with a hard rule that no label exceeds 70 of 200 (35%).
 
@@ -250,5 +260,6 @@ Because the decision is *no*, the CSV ships with four columns (`text`, `label`, 
 |---|---|
 | *(before collection)* | Initial version — taxonomy, edge-case rules, collection plan, metrics, success tiers, AI tool plan. |
 | *(before collection)* | §7a: ran the label stress test, output in [`label-stress-test.md`](label-stress-test.md); recorded that the §3 edge cases were part of the prompt, not just the §2 definitions. §7b: specified the `pre_labeled` tracking column in advance, in case the no-pre-labeling decision gets reversed. |
+| *(before collection)* | §4: the original plan assumed an in-season window, but collection falls before the Oct 3 preseason, so game and post-game threads don't exist yet. Re-sourced `consensus_take` / `hot_take` / `stat_backed` to the current offseason window, and carved a `reaction`-only exception to the §3b window freeze — justified because `reaction` carries no claim and so has no consensus to drift against. Switched from manual copy-paste to scripted collection of unlabeled comments ([`tools/collect_reddit.py`](tools/collect_reddit.py)); hand-labeling is unchanged. |
 
 *(Per the assignment, this document gets updated before starting any stretch feature. Log those updates here.)*
