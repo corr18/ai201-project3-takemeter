@@ -36,7 +36,7 @@ Four labels, ordered by what kind of support the comment offers for what it clai
 
 *Uncertain case:* "LeBron is overrated, his playoff record against 1-seeds is under .500." One real number, but it's cherry-picked and the framing is accusatory — see the decorative-stat rule in §3.
 
-### `consensus_take`
+### `consensus_take
 
 **Definition:** The comment asserts an evaluative claim with no statistical support, and the claim is one r/NBA broadly agrees with — the kind of comment that draws "yeah, obviously" replies and upvotes rather than argument.
 
@@ -204,11 +204,15 @@ The concrete deployment I have in mind is a "receipts" sidebar on a long r/NBA t
 
 ## 7. AI Tool Plan
 
-### 7a. Label stress-testing — *will do, before annotation*
+### 7a. Label stress-testing — *executed before annotation; output in [`label-stress-test.md`](label-stress-test.md)*
 
-**What:** Hand Claude the four definitions and the ordered decision procedure from §2, and ask it to generate 10 r/NBA-style comments engineered to sit exactly on the boundaries — five on `consensus_take` / `hot_take`, three on `stat_backed` / `hot_take` (decorative-stat cases), two on `reaction` / `consensus_take` (embedded-claim cases).
+**Tool:** Claude (Opus).
 
-**How I'll use the output:** label all 10 myself using only the written rules, with no improvising. Any comment I can't resolve from the rules alone is a hole in the taxonomy, and I fix the definition *before* annotating 200 examples rather than discovering the hole at example 130 and having to re-label backward.
+**What I gave it:** the four label definitions and the ordered decision procedure from §2, **plus all four edge-case descriptions from §3** — the decorative stat (§3a), drifting consensus (§3b), Reddit-vs-media consensus (§3c), and the embedded claim (§3d). The edge cases matter more than the definitions here: they tell the model where the boundaries actually are, so the comments it generates land on those boundaries instead of on whatever seams it would have guessed at.
+
+**What I asked for:** 10 r/NBA-style comments engineered to sit exactly on the boundaries — five on `consensus_take` / `hot_take`, three on `stat_backed` / `hot_take` (decorative-stat cases), two on `reaction` / `consensus_take` (embedded-claim cases).
+
+**How I'll use the output:** label all 10 myself using only the written rules, with no improvising. Any comment I can't resolve from the rules alone is a hole in the taxonomy, and I fix the definition *before* annotating 200 examples rather than discovering the hole at example 130 and having to re-label backward. The sharpest pair in the generated set is #2 vs. #5 — both attach a single stat to a player-evaluation claim, and only the load-bearing test from §3a separates them. If those two can't be told apart from the written rule, §3a needs rewriting before annotation starts.
 
 **What I'm explicitly not doing:** these generated comments never enter the dataset. They're a test of the definitions, not training data. Synthetic r/NBA comments written by an LLM have a different texture from real ones and would teach the model the wrong distribution.
 
@@ -216,7 +220,15 @@ The concrete deployment I have in mind is a "receipts" sidebar on a long r/NBA t
 
 I considered having an LLM pre-label a batch and reviewing its output. **I'm declining, deliberately, for the `consensus_take` / `hot_take` boundary specifically.** That boundary is the entire intellectual content of this project, and it's a judgment about community norms that I want to be *mine*, consistently applied. An LLM's pre-label would anchor me — reviewing a suggested label is psychologically a different task from making one, and I'd accept plausible-looking wrong labels at a rate I couldn't measure. Given that the baseline comparison is literally "can a zero-shot LLM do this," letting that same class of model seed my ground truth would contaminate the comparison in a way that's hard to reason about.
 
-I will label all 200 by hand. If I revise this decision mid-project — for instance, using an LLM only to pre-filter obvious `reaction` comments, where the judgment is cheap and the anchoring risk is low — I'll update this section, tag the affected rows in the `notes` column, and disclose it in the README's AI usage section.
+I will label all 200 by hand.
+
+**Tracking mechanism, specified in advance in case I reverse this.** If I do end up pre-labeling any batch — the one case I'd consider is using an LLM purely to pre-filter obvious `reaction` comments, where the judgment is cheap and the anchoring risk is low — the disclosure trail is already designed:
+
+- **Tool:** Claude (Opus), the same model used for stress-testing, so the disclosure names one tool rather than a vague "an LLM."
+- **Row-level tracking:** add a `pre_labeled` column to the CSV with values `no` (default, hand-labeled from scratch), `accepted` (LLM proposed a label and I agreed), or `overridden` (LLM proposed a label and I changed it). A plain flag isn't enough — the accepted/overridden split is what lets me *measure* the anchoring risk instead of just asserting it's low. If my override rate on pre-labeled rows is far below my hesitation rate on hand-labeled rows, that's evidence I was rubber-stamping, and it's visible in the data rather than hidden.
+- **Reporting:** the counts for each value go in the README's AI usage section, and I update §7b and the §8 revision log before labeling a single pre-labeled row.
+
+Because the decision is *no*, the CSV ships with four columns (`text`, `label`, `notes`, `source_thread_type`) and no `pre_labeled` column. Its absence is itself the disclosure: every row was labeled by hand.
 
 ### 7c. Failure analysis — *will do, after evaluation*
 
@@ -237,5 +249,6 @@ I will label all 200 by hand. If I revise this decision mid-project — for inst
 | Date | Change |
 |---|---|
 | *(before collection)* | Initial version — taxonomy, edge-case rules, collection plan, metrics, success tiers, AI tool plan. |
+| *(before collection)* | §7a: ran the label stress test, output in [`label-stress-test.md`](label-stress-test.md); recorded that the §3 edge cases were part of the prompt, not just the §2 definitions. §7b: specified the `pre_labeled` tracking column in advance, in case the no-pre-labeling decision gets reversed. |
 
 *(Per the assignment, this document gets updated before starting any stretch feature. Log those updates here.)*
