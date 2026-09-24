@@ -2,7 +2,7 @@
 
 A fine-tuned text classifier that sorts r/NBA comments by **what kind of support a take offers** — does it bring numbers, echo what the sub already believes, swing against the grain, or just scream?
 
-> **Demo video:** Not recorded or linked yet. The assignment requires a 3–5 minute video showing live classifications, one correct and one incorrect prediction, and the evaluation report; add its hosted link here before submission.
+
 > **Labeled dataset:** [`data/takemeter_labeled.csv`](data/takemeter_labeled.csv) — 227 examples, unsplit
 > **Design doc:** [`planning.md`](planning.md) — written before data collection
 > **Notebook:** [`takemeter_colab.ipynb`](takemeter_colab.ipynb) — the full pipeline, self-contained
@@ -153,27 +153,25 @@ These are cases I actually hit. The edge cases I *anticipated* before collecting
 
 **Base model:** `distilbert-base-uncased` (66M parameters) — a distilled BERT that keeps most of BERT-base's language understanding at roughly 40% of the size, which makes it trainable on a free T4 in minutes.
 
-**Setup:** learning rate 2e-5, batch size 16, max sequence length 256, weight decay 0.01, warmup ratio 0.1, seed 42. The dataset is split 70/15/15 into train/validation/test, **stratified by label** — with only 35 test rows, an unstratified draw can easily leave a class with two or three test examples, and per-class F1 on three examples is noise rather than measurement.
+Setup: learning rate 2e-5, batch size 16, max sequence length 256, weight decay 0.01, warmup ratio 0.1, seed 42. The dataset is split 70/15/15 into train/validation/test, stratified by label — with only 35 test rows, an unstratified draw can easily leave a class with two or three test examples, and per-class F1 on three examples is noise rather than measurement.
 
-**Key hyperparameter decision: epochs are selected by validation macro-F1 rather than fixed at 3.**
+Key hyperparameter decision: epochs are selected by validation macro-F1 rather than fixed at 3.
 
 The notebook default of 3 epochs is a guess that ignores the dataset. With ~158 training examples and batch size 16, one epoch is only 10 optimizer steps — so 3 epochs is 30 steps total, which can leave the classification head undertrained. But simply raising it to 8 overfits a set this small. Rather than pick a number blind, training runs up to 8 epochs, evaluates on the validation split after each one, and restores the checkpoint with the best validation macro-F1 (`load_best_model_at_end`), with early stopping after 3 epochs without improvement. Macro-F1 is the selection metric for the same reason it's the primary metric in [planning.md §5](planning.md): it refuses to let an easy class subsidize a hard one, whereas selecting on accuracy would happily pick a checkpoint that had given up on `stat_backed`.
 
 Epoch 7 and epoch 8 tied for the best validation macro-F1 (0.5989), so the trainer retained epoch 7. Validation loss continued to fall from 1.0020 at epoch 7 to 0.9971 at epoch 8; macro-F1, the registered selection metric, did not improve.
 
-**Class imbalance handling:** none, and none needed. The distribution spans 21.1% to 28.2%, so the loss was left unweighted; weighting a distribution this even would add a knob without addressing a real problem.
+Class imbalance handling: none, and none needed. The distribution spans 21.1% to 28.2%, so the loss was left unweighted; weighting a distribution this even would add a knob without addressing a real problem.
 
 ---
 
-## Baseline
+ Baseline
 
-**Baseline:** zero-shot classification through Groq with no task-specific training, run against the same stratified test set as DistilBERT. The assignment-specified Llama 4 Scout model was retired. The notebook now uses Groq's [recommended replacement, `openai/gpt-oss-120b`](https://console.groq.com/docs/deprecations). This is a documented deviation from the assignment; the saved metrics still reflect the failed old-model run until the notebook is rerun with the replacement.
+ Baseline:zero-shot classification through Groq with no task-specific training, run against the same stratified test set as DistilBERT. The assignment-specified Llama 4 Scout model was retired. The notebook now uses Groq's [recommended replacement, `openai/gpt-oss-120b`](https://console.groq.com/docs/deprecations). This is a documented deviation from the assignment; the saved metrics still reflect the failed old-model run until the notebook is rerun with the replacement.
 
 The prompt carries the label definitions and the ordered decision procedure verbatim from planning.md, so the zero-shot model gets the same rules as the human review.
 
-**Prompt used:**
 
-```text
 You are classifying comments from r/NBA by WHAT KIND OF SUPPORT the take offers.
 
 Apply this decision procedure IN ORDER and stop at the first match:
@@ -208,15 +206,15 @@ reaction
 
 Each test comment is sent separately at temperature 0. The replacement uses low reasoning effort with reasoning text disabled and a 128-token completion limit; successful responses are parsed by exact token match first, then substring. Genuine unparseable model responses are scored as wrong rather than dropped.
 
-**Prediction recorded before running anything** (in [planning.md §5](planning.md)): I expected the zero-shot LLM to *beat* DistilBERT on the `consensus_take` / `hot_take` boundary, because that boundary requires knowing what NBA fans believe — world knowledge a 17B internet-trained model has and a 66M DistilBERT fine-tuned on ~158 examples does not. I expected DistilBERT to win on `reaction` and `stat_backed`, where the signal is lexical and learnable from few examples.
+Prediction recorded before running anything (in [planning.md §5](planning.md)): I expected the zero-shot LLM to *beat* DistilBERT on the `consensus_take` / `hot_take` boundary, because that boundary requires knowing what NBA fans believe — world knowledge a 17B internet-trained model has and a 66M DistilBERT fine-tuned on ~158 examples does not. I expected DistilBERT to win on `reaction` and `stat_backed`, where the signal is lexical and learnable from few examples.
 
 The prediction cannot yet be evaluated. The saved test predictions come from the failed Llama 4 Scout call; rerunning the notebook with the replacement is required to measure whether the expected consensus/hot-take advantage holds.
 
 ---
 
-## Evaluation report
+ Evaluation report
 
-### Fine-tuned model results
+ Fine-tuned model results
 
 On the 35-row stratified test set, DistilBERT reached **60.0% accuracy**, **0.549 macro-F1**, and **0.535 weighted-F1**. It clears the Tier 1 accuracy and macro-F1 thresholds, but misses the Tier 1 requirement that every class have nonzero F1. Results are noisy at this test size: each class has only 7–10 examples.
 
@@ -238,11 +236,11 @@ Confusion matrix (rows are true labels; columns are predictions):
 
 The model made 14 errors. Eight were across the **consensus/hot-take boundary** (seven hot takes predicted as consensus and one consensus take predicted as hot take). It also missed all nine hot takes as a class, splitting them between `consensus_take` and `stat_backed`. The high `stat_backed` and `reaction` scores are directional only, given the small supports.
 
-### Baseline results need a rerun
+Baseline results need a rerun
 
 The original 35 Groq requests returned HTTP 404 because the specified model was shut down on July 17, 2026, according to [Groq's deprecation notice](https://console.groq.com/docs/deprecations). Those API errors are preserved as `API_ERROR`; their zero-score export has been corrected to null metrics and must not be treated as a model result. The notebook is now configured for Groq's recommended `openai/gpt-oss-120b` replacement, which is a deviation from the exact model named in the course brief. **To produce baseline metrics**, open the notebook in Colab, set the Groq secret, and rerun the notebook so it exports fresh `evaluation_results.json` and `test_predictions.csv`. Until then, there is no valid baseline score and the baseline comparison requirement is incomplete.
 
-### Error examples
+Error examples
 
 These fine-tuned model errors illustrate the observed boundaries:
 
