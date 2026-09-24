@@ -2,7 +2,7 @@
 
 **Project:** A fine-tuned text classifier that sorts r/NBA comments by *what kind of support a take offers*.
 **Written:** before any data collection or annotation.
-**Status:** design locked; collection not yet started.
+**Status:** initial design was written before collection; subsequent revisions record the work completed and the remaining limitations.
 
 ---
 
@@ -226,20 +226,11 @@ The concrete deployment I have in mind is a "receipts" sidebar on a long r/NBA t
 
 **What I'm explicitly not doing:** these generated comments never enter the dataset. They're a test of the definitions, not training data. Synthetic r/NBA comments written by an LLM have a different texture from real ones and would teach the model the wrong distribution.
 
-### 7b. Annotation assistance — *DECISION REVERSED: every label in the current CSV was machine-proposed*
+### 7b. Annotation assistance — *decision reversed; all labels were machine-proposed*
 
-> **Status: the plan below was overtaken by events, and the record of both states is kept deliberately.** The original decision was no pre-labeling, for the reasons still set out beneath this box. In practice the dataset was assembled and labeled in one pass by Claude (Opus), which means **all 204 rows as of that moment carry a proposed label that has not yet been confirmed by a human** (the set was later topped up to 227 to clear the 20% floor on `stat_backed`). Every row is marked `pre_labeled=proposed` in the CSV. None are `accepted` or `overridden` yet, because no human review pass has happened.
->
-> **This is not a finished dataset and must not be trained on as-is.** Two separate reasons:
->
-> 1. **Academic.** The annotation is the graded intellectual work of this project. A model trained on machine labels measures the machine's taxonomy, not mine.
-> 2. **Methodological, and the more interesting one.** The `consensus_take` / `hot_take` boundary is defined as *alignment with what r/NBA believed at the time*. An LLM's read on that is a guess about community belief, and it is the **same class of judgment the zero-shot baseline is being tested on**. If the ground truth is machine-proposed and the baseline is machine-produced, the baseline comparison partly measures agreement between two LLMs rather than task difficulty — the exact contamination the original decision was written to avoid.
->
-> **Required next step:** review every row against §2 and §3, flipping each to `accepted` or `overridden`. The accepted-vs-overridden split then does the work the tracking column was designed for: if the override rate is very low, that is evidence of rubber-stamping rather than evidence the proposals were good, and it needs to be reported as such.
+The original decision was to hand-label without pre-labeling, for the reasons set out below. In practice, Claude (Opus) assembled and proposed labels for all 227 rows. I then reviewed the rows in the local review tool: 227 accepted, 0 overridden. I had already read and formed judgments about the proposed labels before using that tool, so this was confirmation rather than a cold, independent pass. The 0% override rate is therefore not evidence of independent annotation reliability, and the dataset's machine-originated labels limit what the model evaluation can establish.
 
-> **Update — the review pass is complete, and the override rate is 0%.** All 227 rows now read `accepted`; none were overridden. That number needs its context stated rather than buried, because the paragraph directly above pre-registered a near-zero override rate as a warning sign. What happened: I had already read the proposed labels before the review tool existed, and formed my own judgement on them at that point. The pass in the tool was therefore a *confirmation* of judgements already made, not a first reading, which is why it ran quickly. I agreed with the machine proposal on every row.
->
-> I am recording the rate rather than explaining it away, because the two readings are not distinguishable from the artifact alone. A reader who wants to discount the review has the number they need to do so, and the inter-annotator check in §8a is the independent evidence that speaks to label quality without relying on my account of my own process.
+The CSV preserves each original proposal and its review status. No second annotator has completed the planned blind review; the inter-annotator stretch feature in §8a remains uncompleted.
 
 *Original decision, retained for the record:*
 
@@ -253,9 +244,9 @@ I will label all 200 by hand.
 - **Row-level tracking:** add a `pre_labeled` column to the CSV with values `no` (default, hand-labeled from scratch), `accepted` (LLM proposed a label and I agreed), or `overridden` (LLM proposed a label and I changed it). A plain flag isn't enough — the accepted/overridden split is what lets me *measure* the anchoring risk instead of just asserting it's low. If my override rate on pre-labeled rows is far below my hesitation rate on hand-labeled rows, that's evidence I was rubber-stamping, and it's visible in the data rather than hidden.
 - **Reporting:** the counts for each value go in the README's AI usage section, and I update §7b and the §9 revision log before labeling a single pre-labeled row.
 
-~~Because the decision is *no*, the CSV ships with four columns and no `pre_labeled` column. Its absence is itself the disclosure: every row was labeled by hand.~~ **Superseded.** The CSV ships with five columns — `text`, `label`, `notes`, `source_thread_type`, `pre_labeled` — and every row currently reads `proposed`.
+~~Because the decision is *no*, the CSV ships with four columns and no `pre_labeled` column. Its absence is itself the disclosure: every row was labeled by hand.~~ **Superseded.** The CSV includes `pre_labeled` and `proposed_label` fields; proposals originated from Claude and all 227 review decisions are `accepted`.
 
-### 7c. Failure analysis — *will do, after evaluation*
+### 7c. Failure analysis — *completed after evaluation; the planned Groq baseline failed*
 
 **What:** Export every misclassified test example with its true label, predicted label, and confidence. Give the full list to Claude and ask it to propose systematic patterns — not to explain individual errors.
 
@@ -275,6 +266,8 @@ I will label all 200 by hand.
 
 ### 8a. Inter-annotator reliability
 
+**Status: not completed.** The blind 40-row workflow was built, but no second annotator's labels were collected. There is no agreement percentage or Cohen's kappa to report, so this planned stretch feature earns no completion credit.
+
 **Why this one first.** Given the 0% override rate in §7b, an independent second annotator is the only evidence about label quality that does not depend on my own account of my own process. If a second person applying the same written rules lands where I did, the taxonomy transmits; if they scatter, the definitions are doing less work than I think and the model's ceiling is my annotation noise.
 
 **Method.** A blind mode in [`tools/review_labels.py`](tools/review_labels.py) serves a stratified 40-row sample — 10 per label, seeded so it is reproducible — with **the existing label hidden**. The second annotator sees only the comment and the four definitions, and labels from scratch. Their decisions are written to a separate file, `data/annotator2_labels.csv`; the main dataset is never touched by that mode.
@@ -284,6 +277,8 @@ I will label all 200 by hand.
 **What I expect.** Disagreement should concentrate almost entirely on `consensus_take` vs. `hot_take`, since that boundary requires a shared model of what r/NBA believes, and a second annotator who is not a regular there has no reason to share mine. I expect near-total agreement on `reaction`. If disagreement instead lands on `stat_backed`, the load-bearing test in §3a is written worse than I think.
 
 ### 8b. Confidence calibration
+
+**Status: completed.** The README reports the test-set confidence buckets and ECE; the small test set limits how strongly those values can be interpreted.
 
 **Question.** Does a 90%-confident prediction actually get it right more often than a 60%-confident one? A classifier whose confidence is uninformative cannot be deployed behind a threshold, which is exactly how the §6 Tier 3 "receipts sidebar" would have to work.
 
@@ -295,11 +290,15 @@ I will label all 200 by hand.
 
 ### 8c. Error pattern analysis
 
+**Status: completed.** The short-comment and digit-presence hypotheses were checked against both errors and correct predictions; the directional hot-take-to-consensus error was confirmed. Results are reported in the README.
+
 This extends the §7c plan from listing individual errors to establishing a *systematic* pattern. The four hypotheses in §7c are the ones I will test — short comments, directional `consensus_take` ↔ `hot_take` confusion, player-name topic shortcuts, and any-digit-means-`stat_backed`.
 
 **The methodological rule that makes this worth doing:** every candidate pattern gets checked against the **correctly classified** examples too. A property shared by the errors and the successes alike explains nothing, and that is the specific way this analysis fails — a confident narrative about six errors always sounds right. Patterns I test and reject go in the README next to the ones I keep. I will also use the `source_thread_type` column to check whether errors cluster by collection source, which would indicate the sampling artifact flagged in §4 rather than a modeling failure.
 
 ### 8d. Deployed interface
+
+**Status: implementation committed; live demonstration pending.** The app code is present, but its trained model archive is produced by running the Colab export cell and is not committed.
 
 **What.** A local web app — [`tools/takemeter_app.py`](tools/takemeter_app.py) — that accepts a pasted comment, runs the fine-tuned model, and shows the predicted label with confidence across all four labels, not just the winner. Showing the full distribution is the deliberate choice: a 0.38 / 0.35 split between `consensus_take` and `hot_take` is a visibly different situation from 0.95 / 0.02, and collapsing both to "the answer" would hide exactly the boundary this project is about.
 
@@ -320,5 +319,6 @@ This extends the §7c plan from listing individual errors to establishing a *sys
 | *(after collection)* | §7b: review pass completed in [`tools/review_labels.py`](tools/review_labels.py). 227/227 rows confirmed, 0 overridden. The 0% rate and the reason for it are recorded in §7b rather than explained away. |
 | *(before stretch work)* | Added §8 with plans for all four stretch features — inter-annotator reliability, confidence calibration, error pattern analysis, deployed interface — including the kappa interpretation bands and the calibration sample-size caveat, both committed before seeing any result. |
 | *(before stretch work)* | §2: fixed an unterminated code span in the `consensus_take` heading. No change to the definition. |
+| 2026-09-24 | Updated §7b and §8 to match completed work and mark independent annotation as outstanding; recorded completed calibration/error analysis and the interface's missing model archive. The required Groq baseline model was retired before a valid run; the README reports this limitation rather than treating API failures as model metrics. |
 
 *(Per the assignment, this document gets updated before starting any stretch feature. Log those updates here.)*

@@ -1,0 +1,252 @@
+{
+  "labels": [
+    "stat_backed",
+    "consensus_take",
+    "hot_take",
+    "reaction"
+  ],
+  "dataset": {
+    "total": 227,
+    "distribution": {
+      "consensus_take": 64,
+      "reaction": 59,
+      "hot_take": 56,
+      "stat_backed": 48
+    },
+    "split": {
+      "train": 158,
+      "val": 34,
+      "test": 35
+    },
+    "override_rate": 0.0
+  },
+  "training": {
+    "base_model": "distilbert-base-uncased",
+    "epochs_max": 8,
+    "best_epoch": 7.0,
+    "learning_rate": 2e-05,
+    "batch_size": 16,
+    "max_length": 256,
+    "weight_decay": 0.01,
+    "warmup_ratio": 0.1,
+    "seed": 42,
+    "selection_metric": "validation macro-F1",
+    "history": [
+      {
+        "epoch": 1.0,
+        "val_loss": 1.3464,
+        "val_accuracy": 0.3235,
+        "val_macro_f1": 0.2007,
+        "train_loss": 1.3698
+      },
+      {
+        "epoch": 2.0,
+        "val_loss": 1.2755,
+        "val_accuracy": 0.5588,
+        "val_macro_f1": 0.4862,
+        "train_loss": 1.2831
+      },
+      {
+        "epoch": 3.0,
+        "val_loss": 1.1804,
+        "val_accuracy": 0.6176,
+        "val_macro_f1": 0.5372,
+        "train_loss": 1.1605
+      },
+      {
+        "epoch": 4.0,
+        "val_loss": 1.1072,
+        "val_accuracy": 0.6176,
+        "val_macro_f1": 0.5372,
+        "train_loss": 1.0327
+      },
+      {
+        "epoch": 5.0,
+        "val_loss": 1.0605,
+        "val_accuracy": 0.6176,
+        "val_macro_f1": 0.5764,
+        "train_loss": 0.921
+      },
+      {
+        "epoch": 6.0,
+        "val_loss": 1.0251,
+        "val_accuracy": 0.6176,
+        "val_macro_f1": 0.5764,
+        "train_loss": 0.8375
+      },
+      {
+        "epoch": 7.0,
+        "val_loss": 1.002,
+        "val_accuracy": 0.6471,
+        "val_macro_f1": 0.5989,
+        "train_loss": 0.7782
+      },
+      {
+        "epoch": 8.0,
+        "val_loss": 0.9971,
+        "val_accuracy": 0.6471,
+        "val_macro_f1": 0.5989,
+        "train_loss": 0.7544
+      }
+    ]
+  },
+  "baseline": {
+    "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "temperature": 0,
+    "unparseable": 0,
+    "n_test": 35,
+    "accuracy": null,
+    "macro_f1": null,
+    "weighted_f1": null,
+    "per_class": null,
+    "confusion_matrix": null,
+    "prompt": "You are classifying comments from r/NBA by WHAT KIND OF SUPPORT the take offers.\n\nApply this decision procedure IN ORDER and stop at the first match:\n\n1. Does the comment cite a specific, checkable number (a stat line, percentage, rank, split,\n   record, or dated comparison) that does real argumentative work?\n   Test: delete the number. If the argument gets weaker, the number was load-bearing.\n   If the identical assertion remains with identical force, the number was decorative -\n   do NOT stop here, continue to step 2.\n   -> stat_backed\n\n2. Otherwise, does it assert an evaluative claim?\n   Test: imagine a reply saying \"yeah, obviously.\"\n   - Reads as normal, because r/NBA broadly agrees -> consensus_take\n   - Reads as sarcastic, because the claim runs against r/NBA consensus -> hot_take\n   Consensus means r/NBA consensus, NOT national NBA media consensus. When they disagree,\n   r/NBA wins.\n\n3. No evaluative claim survives stripping the emotion (caps, emoji, exclamations, jokes,\n   chants like \"MVP! MVP!\").\n   -> reaction\n\nOrder matters: a contrarian comment that brings real load-bearing numbers is stat_backed,\nnot hot_take. Evidence outranks alignment.\n\nRespond with EXACTLY ONE of these four words and nothing else:\nstat_backed\nconsensus_take\nhot_take\nreaction",
+    "status": "unavailable_api_error",
+    "error_count": 35,
+    "error": "All requests returned HTTP 404: the assignment-specified Groq Llama 4 Scout model has been shut down."
+  },
+  "fine_tuned": {
+    "accuracy": 0.6,
+    "macro_f1": 0.5487,
+    "weighted_f1": 0.535,
+    "per_class": {
+      "stat_backed": {
+        "precision": 0.75,
+        "recall": 0.8571,
+        "f1-score": 0.8,
+        "support": 7.0
+      },
+      "consensus_take": {
+        "precision": 0.4444,
+        "recall": 0.8,
+        "f1-score": 0.5714,
+        "support": 10.0
+      },
+      "hot_take": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1-score": 0.0,
+        "support": 9.0
+      },
+      "reaction": {
+        "precision": 0.875,
+        "recall": 0.7778,
+        "f1-score": 0.8235,
+        "support": 9.0
+      }
+    },
+    "confusion_matrix": [
+      [
+        6,
+        1,
+        0,
+        0
+      ],
+      [
+        0,
+        8,
+        1,
+        1
+      ],
+      [
+        2,
+        7,
+        0,
+        0
+      ],
+      [
+        0,
+        2,
+        0,
+        7
+      ]
+    ]
+  },
+  "reference_points": {
+    "random_chance": 0.25,
+    "always_majority": 0.2857,
+    "majority_label": "consensus_take"
+  },
+  "calibration": {
+    "buckets": [
+      {
+        "bucket": "<50%",
+        "n": 25,
+        "mean_confidence": 0.389,
+        "accuracy": 0.48
+      },
+      {
+        "bucket": "50-70%",
+        "n": 10,
+        "mean_confidence": 0.63,
+        "accuracy": 0.9
+      }
+    ],
+    "ece": 0.1421,
+    "mean_confidence": 0.458,
+    "mean_conf_correct": 0.5025,
+    "mean_conf_wrong": 0.3913
+  },
+  "success_tiers": [
+    {
+      "tier": 1,
+      "criterion": "accuracy >= 0.50",
+      "met": true,
+      "actual": "0.600"
+    },
+    {
+      "tier": 1,
+      "criterion": "macro-F1 >= 0.45",
+      "met": true,
+      "actual": "0.549"
+    },
+    {
+      "tier": 1,
+      "criterion": "no class with F1 = 0",
+      "met": false,
+      "actual": "min per-class F1 0.00"
+    },
+    {
+      "tier": 1,
+      "criterion": "beats baseline on macro-F1",
+      "met": null,
+      "actual": "not assessable: API model unavailable"
+    },
+    {
+      "tier": 2,
+      "criterion": "accuracy >= 0.70",
+      "met": false,
+      "actual": "0.600"
+    },
+    {
+      "tier": 2,
+      "criterion": "macro-F1 >= 0.65",
+      "met": false,
+      "actual": "0.549"
+    },
+    {
+      "tier": 2,
+      "criterion": "every per-class F1 >= 0.55",
+      "met": false,
+      "actual": "min 0.00"
+    },
+    {
+      "tier": 2,
+      "criterion": "consensus<->hot under half of errors",
+      "met": false,
+      "actual": "8 of 14 errors"
+    },
+    {
+      "tier": 3,
+      "criterion": "stat_backed precision >= 0.80",
+      "met": false,
+      "actual": "0.75"
+    },
+    {
+      "tier": 3,
+      "criterion": "stat_backed recall >= 0.50",
+      "met": true,
+      "actual": "0.86"
+    }
+  ]
+}
