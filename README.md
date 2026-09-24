@@ -96,17 +96,19 @@ Three supporting tests do the actual work at the boundaries:
 
 | Label | Count | Share | Mean words |
 |---|---|---|---|
-| `stat_backed` | 35 | 17.2% | 41.6 |
-| `consensus_take` | 60 | 29.4% | 36.4 |
-| `hot_take` | 53 | 26.0% | 29.6 |
-| `reaction` | 56 | 27.5% | 11.0 |
-| **Total** | **204** | 100% | — |
+| `stat_backed` | 48 | 21.1% | 43.4 |
+| `consensus_take` | 64 | 28.2% | 36.5 |
+| `hot_take` | 56 | 24.7% | 29.9 |
+| `reaction` | 59 | 26.0% | 11.4 |
+| **Total** | **227** | 100% | — |
 
-No label exceeds the 70-row cap from planning.md, and the validator reports zero near-duplicates — important, because a duplicate straddling the 70/15/15 split would inflate test accuracy invisibly.
+Every class sits between 21% and 28%. No label approaches the 70-row cap from planning.md, and the validator reports zero near-duplicates — which matters, because a duplicate straddling the 70/15/15 split would inflate test accuracy invisibly.
 
-**`stat_backed` is under quota at 17.2%**, against a 25% target and a 20% floor. It's genuinely the scarce class on r/NBA, and collection hit API rate limits before it could be topped up. The escalation path in [planning.md §4](planning.md) is to run more stat-vocabulary queries (`efficiency`, `rebounds`, `splits`) through `collect_reddit.py` and merge them in. Until then, `stat_backed` metrics rest on the fewest examples of any class and should be read with that in mind.
+`stat_backed` is the scarce class on r/NBA and needed two extra rounds of stat-vocabulary queries (`rebounds`, `assists`) to clear the 20% floor. It remains the smallest class, so its per-class numbers rest on the fewest test examples of any label.
 
-**The length gap is a live leakage risk.** `reaction` averages 11 words; `stat_backed` averages 42. A model can get a long way on length alone without ever learning the load-bearing test, so this gets checked explicitly in the reflection section rather than assumed away.
+**The length gap is a live leakage risk.** `reaction` averages 11 words; `stat_backed` averages 43. A model can get a long way on length alone without ever learning the load-bearing test, so this gets checked explicitly in the reflection section rather than assumed away.
+
+**Test-set size, stated plainly.** 227 examples with a 15% test split gives roughly 34 test comments — about 8 per class. A single example moves a per-class F1 by roughly 0.12. Per-class numbers below are directional; the confusion matrix and the actual error text carry more weight than any decimal place.
 
 ### Three examples that were genuinely hard to label
 
