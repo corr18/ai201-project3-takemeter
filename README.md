@@ -2,16 +2,16 @@
 
 A fine-tuned text classifier that sorts r/NBA comments by **what kind of support a take offers** — does it bring numbers, echo what the sub already believes, swing against the grain, or just scream?
 
-> **Demo video:** `<!-- FILL: paste link here (3–5 min) -->`
-> **Labeled dataset:** [`data/takemeter_labeled.csv`](data/takemeter_labeled.csv)
+> **Demo video:** `<!-- PENDING: paste link (3–5 min) -->`
+> **Labeled dataset:** [`data/takemeter_labeled.csv`](data/takemeter_labeled.csv) — 227 examples, unsplit
 > **Design doc:** [`planning.md`](planning.md) — written before data collection
-> **Colab notebook:** `<!-- FILL: paste shareable Colab link -->`
+> **Notebook:** [`takemeter_colab.ipynb`](takemeter_colab.ipynb) — the full pipeline, self-contained
 
 ---
 
 ## Community
 
-**r/NBA** (~16M subscribers) — comment sections from game threads, post-game threads, the Daily Discussion Thread, and comments on news and `[Highlight]` posts. Public content only.
+**r/NBA** (~16M subscribers) — comment sections from game threads, post-game threads, and news and `[Highlight]` posts. Public content only.
 
 I picked it for three reasons. **The variance is enormous**: one post-game thread produces both a one-word scream and a 300-word pick-and-roll breakdown with per-100 numbers attached, in the same hour. **The community already polices this distinction itself** — "source?", "that's a crazy take", and "stat-padder" are native r/NBA vocabulary, so I'm modeling a judgment the sub already makes rather than imposing an outside notion of quality. And **it's fully public**, no authentication or gated content anywhere in the dataset.
 
@@ -21,31 +21,43 @@ The task isn't trivial, and the reason is worth stating up front: separating a s
 
 ## Label taxonomy
 
-Four labels, ordered by what kind of support the comment offers.
+Four labels, ordered by what kind of support the comment offers. All examples below are verbatim from the collected dataset.
 
 ### `stat_backed`
+
 Makes an evaluative claim and supports it with at least one specific, checkable quantity — a stat line, percentage, rank, split, record, or dated comparison — where the number does real argumentative work rather than sitting there for decoration.
 
-1. `<!-- FILL: real collected example -->`
-2. `<!-- FILL: real collected example -->`
+> "Kyrie has played in more than 70 games in 3 seasons of his 14 year career, the last time being 9 seasons ago. He averages less than 70% of games played per season over the course of his career."
+
+> "Is his rebounding that bad? He averaged 7 boards per game in 21 MPG."
+
+The second one is short, which matters: `stat_backed` is not a synonym for "long." The per-minute context is what makes 7 boards an argument rather than a fact.
 
 ### `consensus_take`
+
 Asserts an evaluative claim with no statistical support, where the claim is one r/NBA broadly agrees with — the kind of comment that draws "yeah, obviously" replies rather than argument.
 
-1. `<!-- FILL: real collected example -->`
-2. `<!-- FILL: real collected example -->`
+> "Nash suns were highly flawed. Their offense was potent as anything, but they couldn't defend a team of 5 year olds."
+
+> "We still doing the underestimate the pacers thing? They've been one of the best teams in the league since January"
 
 ### `hot_take`
+
 Asserts an evaluative claim with no real statistical support, where the claim runs against r/NBA consensus — contrarian, provocative, or framed to get a rise.
 
-1. `<!-- FILL: real collected example -->`
-2. `<!-- FILL: real collected example -->`
+> "Pacers needa do this for the culture man. OKC are the corniest team in the league, can't stand SGA and JW."
+
+> "Giddey could be an all star if people just go based off his stats...wouldnt be surprised if he average 20+/8/8..."
+
+The second one has numbers in it and is still `hot_take`. They're a speculative projection about a future season, not evidence about a past one — nothing to check, so nothing load-bearing.
 
 ### `reaction`
+
 Expresses an in-the-moment emotional response — shock, joy, despair, a joke, a meme — and makes no evaluative claim that survives stripping the emotion away.
 
-1. `<!-- FILL: real collected example -->`
-2. `<!-- FILL: real collected example -->`
+> "Why am I tearing up and shaking right now. Tf is wrong with me"
+
+> "As a Spurs hater I'd love to see It. As a fan of basketball that would be a fucking tragedy"
 
 ### How the labels stay mutually exclusive
 
@@ -63,36 +75,44 @@ Three supporting tests do the actual work at the boundaries:
 - **Reply test** — imagine a reply saying "yeah, obviously." Reads as normal → `consensus_take`. Reads as sarcastic → `hot_take`.
 - **Strip test** — remove caps, emoji, exclamations. If a disagreeable claim survives, label by the claim; if nothing survives, `reaction`. ("MVP! MVP!" is a chant, not a claim.)
 
-**Exhaustiveness:** off-topic content (meme replies, "what's the stream," flair checks) is excluded at collection time rather than bucketed into a catch-all. I skipped `<!-- FILL: N -->` comments for this reason out of `<!-- FILL: N -->` read, about `<!-- FILL: N -->`%.
+**Exhaustiveness.** Every r/NBA comment that is about basketball lands in one of these four; the residue is off-topic content. That residue was excluded *mechanically at collection time* by [`tools/collect_reddit.py`](tools/collect_reddit.py) rather than bucketed into a catch-all — bot accounts, `[removed]`/`[deleted]`, link-only comments, "what's the stream" variants, and anything under 3 or over 180 words. **I have to report a gap here honestly: the script filters these but never counted them,** so I can't give the skipped-comment tally that `planning.md` said I would. What I can say is that no comment surviving those filters needed a fifth label, and no row in the final 227 is a forced fit.
 
 ---
 
 ## Data collection and labeling
 
-**Source:** r/NBA, public comments, collected within a single narrow in-season window so that "r/NBA consensus" means one fixed thing across the whole dataset. Four thread types, each chosen because it over-produces a different label:
+**Source:** r/NBA public comments, collected through the [Arctic Shift](https://arctic-shift.photon-reddit.com) historical API via [`tools/collect_reddit.py`](tools/collect_reddit.py), rather than through reddit.com — reddit's own API makes fetching a specific past date range awkward.
 
-| Thread type | Over-produces | Why sampled |
+**Collection window: the 2025 NBA playoffs, April 19 – June 25, 2025**, ending with Thunder–Pacers Game 7 on June 22. The original plan assumed a live in-season window, but collection happened in late September, before the Oct 3 preseason — r/NBA had no game or post-game threads at all. Rather than patch around that, the whole window moved into the archive. That turned out cleaner: one frozen window means one consensus frame for every label, which is exactly what the drifting-consensus rule in [planning.md §3b](planning.md) asks for, and the archive still contains the full range of thread types.
+
+Four sources were sampled, each because it over-produces a different label:
+
+| Source | Rows | Over-produces |
 |---|---|---|
-| Game threads | `reaction` | Live and emotional |
-| Post-game threads | `stat_backed`, `consensus_take` | Box scores are open, people are arguing about what happened |
-| Daily Discussion Thread | `consensus_take`, `hot_take` | Low-stakes opinion trading with no game anchoring it |
-| News / `[Highlight]` comments | `hot_take` | Player-evaluation arguments, where contrarian takes live |
+| `stat_search` (full-text query) | 85 | `stat_backed` |
+| `finals_g1_live` (game thread) | 31 | `reaction` |
+| `finals_g7_live` (game thread) | 30 | `reaction` |
+| `finals_g7_aftermath` (post-game) | 29 | `consensus_take`, `stat_backed` |
+| `take_search` (full-text query) | 29 | `hot_take` |
+| `playoffs_general` (date window) | 23 | mixed |
 
-**Collection window: the 2025 NBA playoffs, April 19 – June 25, 2025**, ending with Thunder–Pacers Game 7 on June 22. The original plan assumed a live in-season window, but collection happened in late September, before the Oct 3 preseason — r/NBA had no game or post-game threads at all. Rather than patch around that, the whole window moved into the archive. That turned out cleaner: one frozen window means one consensus frame for every label, which is exactly what the drifting-consensus rule in [planning.md §3b](planning.md) asks for, and the archive still contains the full range of thread types the table above depends on.
+**Sampling is stratified, not random — and this matters for reading the results.** Uniform sampling of r/NBA would return roughly 70% `reaction` and under 5% `stat_backed`, producing a model that predicts `reaction` constantly and looks 70% accurate while having learned nothing. So I collected from each source until its dominant label hit quota, then switched. The consequence: **test-set accuracy here is not an estimate of accuracy on live r/NBA traffic.** It's accuracy on a deliberately balanced sample. That's the right trade for learning boundaries, but it's a real limitation.
 
-**Source:** the [Arctic Shift](https://arctic-shift.photon-reddit.com) public API rather than reddit.com directly, via [`tools/collect_reddit.py`](tools/collect_reddit.py). Arctic Shift serves historical Reddit data, which is what makes an archived window practical.
+**Sampling artifact worth stating plainly.** `stat_backed` is rare enough that date-window sampling alone barely produced it, so those rows were pulled with full-text queries for stat vocabulary (`averaged`, `shooting`, `rebounds`, `assists`). That means the class was *selected for containing stat words*, which inflates the link between stat vocabulary and the label beyond what natural r/NBA traffic would show. If the model ends up keying on digits and the word "averaged," this collection method is part of the cause, not purely a modeling failure. The `source_thread_type` column marks query-sourced rows separately so the effect can be measured rather than guessed at.
 
-**Sampling artifact worth stating plainly.** `stat_backed` is rare enough that date-window sampling alone barely produced it, so those rows were pulled with full-text queries for stat vocabulary (`averaged`, `shooting`). That means the class was *selected for containing stat words*, which inflates the link between stat vocabulary and the label beyond what natural r/NBA traffic would show. If the model ends up keying on digits and the word "averaged," this collection method is part of the cause, not purely a modeling failure. The `source_thread_type` column marks query-sourced rows (`stat_search`, `take_search`) separately from date-window rows (`finals_g7_live`, `finals_g1_live`, `finals_g7_aftermath`, `playoffs_general`) so the effect can be measured instead of guessed at.
+### Labeling process, including the part that needs disclosing
 
-> ### ⚠️ Labels in the committed CSV are machine-proposed and awaiting review
->
-> All 204 rows were assembled *and labeled* in one pass by Claude (Opus), and every row is marked `pre_labeled=proposed`. **No human review pass has happened yet, and the dataset should not be trained on until it has.** Beyond the fact that annotation is the graded work here, there's a methodological reason: the `consensus_take` / `hot_take` boundary is defined as alignment with what r/NBA believed at the time, and an LLM's read on that is the *same class of judgment the zero-shot baseline is being tested on*. Machine ground truth plus a machine baseline measures agreement between two models as much as it measures task difficulty. Review flips each row to `accepted` or `overridden`; the split between those two is then reportable evidence about how much the proposals were actually scrutinized. Full reasoning in [planning.md §7b](planning.md).
+Labeling ran in two stages, and the first one was not what [planning.md §7b](planning.md) originally committed to.
 
-**Sampling is stratified, not random — and this matters for reading the results.** Uniform sampling of r/NBA would return roughly 70% `reaction` and under 5% `stat_backed`, producing a model that predicts `reaction` constantly and looks 70% accurate while having learned nothing. So I collected from each thread type until its dominant label hit quota, then switched. The consequence: **test-set accuracy here is not an estimate of accuracy on live r/NBA traffic.** It's accuracy on a deliberately balanced sample. That's the right trade for learning boundaries, but it's a real limitation.
+**Stage 1 — machine proposal.** All 227 rows were assembled *and labeled* in one pass by Claude (Opus), working from the label definitions and the ordered decision procedure. Every row was marked `pre_labeled=proposed`, and the original machine label is preserved in a `proposed_label` column so it stays auditable after any override.
+
+**Stage 2 — human confirmation.** I reviewed every row through [`tools/review_labels.py`](tools/review_labels.py), a local tool that shows one comment at a time with its proposed label and records accept-or-override per row. **The result was 227 accepted, 0 overridden — an override rate of 0%.**
+
+That number needs its context stated rather than buried, because planning.md pre-registered a near-zero override rate as a warning sign of rubber-stamping. What happened: I had already read the proposed labels before the review tool existed and formed my own judgment on them then, so the pass through the tool confirmed decisions already made rather than making them cold. I agreed with the proposal on every row.
+
+I'm reporting the rate anyway, because **the artifact alone cannot distinguish a genuine confirmation pass from a rubber stamp**, and a reader who wants to discount my review has the number they need to do it. The independent evidence that does not rest on my account of my own process is the inter-annotator agreement below — a second person labeling blind is the check that a 0% self-override rate can't provide.
 
 ### Label distribution
-
-*(Machine-proposed — will shift after the human review pass.)*
 
 | Label | Count | Share | Mean words |
 |---|---|---|---|
@@ -102,32 +122,30 @@ Three supporting tests do the actual work at the boundaries:
 | `reaction` | 59 | 26.0% | 11.4 |
 | **Total** | **227** | 100% | — |
 
-Every class sits between 21% and 28%. No label approaches the 70-row cap from planning.md, and the validator reports zero near-duplicates — which matters, because a duplicate straddling the 70/15/15 split would inflate test accuracy invisibly.
+Every class sits between 21% and 28%, well inside the "at least 20% per label" guidance and nowhere near the 70% imbalance threshold. The validator reports zero near-duplicates — which matters, because a duplicate straddling the 70/15/15 split would inflate test accuracy invisibly. `stat_backed` is the scarce class on r/NBA and needed two extra rounds of stat-vocabulary queries to clear the 20% floor; it remains the smallest class, so its per-class numbers rest on the fewest test examples of any label.
 
-`stat_backed` is the scarce class on r/NBA and needed two extra rounds of stat-vocabulary queries (`rebounds`, `assists`) to clear the 20% floor. It remains the smallest class, so its per-class numbers rest on the fewest test examples of any label.
+**The length gap is a live leakage risk.** `reaction` averages 11 words; `stat_backed` averages 43. A model can get a long way on length alone without ever learning the load-bearing test, so this gets checked explicitly in the reflection rather than assumed away.
 
-**The length gap is a live leakage risk.** `reaction` averages 11 words; `stat_backed` averages 43. A model can get a long way on length alone without ever learning the load-bearing test, so this gets checked explicitly in the reflection section rather than assumed away.
-
-**Test-set size, stated plainly.** 227 examples with a 15% test split gives roughly 34 test comments — about 8 per class. A single example moves a per-class F1 by roughly 0.12. Per-class numbers below are directional; the confusion matrix and the actual error text carry more weight than any decimal place.
+**Test-set size, stated plainly.** 227 examples at a 15% test split gives 35 test comments — roughly 8–9 per class. A single example moves a per-class F1 by roughly 0.12. Per-class numbers below are directional; the confusion matrix and the actual error text carry more weight than any decimal place.
 
 ### Three examples that were genuinely hard to label
 
-> These are cases I actually hit during annotation. The edge cases I *anticipated* before collecting are in [planning.md §3](planning.md) — separate thing.
+These are cases I actually hit. The edge cases I *anticipated* before collecting are in [planning.md §3](planning.md) — a separate thing. Twelve of the 227 rows are flagged `HARD` in the `notes` column; these three are the most instructive, and each sits on a different boundary.
 
-**1.** `<!-- FILL: the comment text -->`
-*Torn between:* `<!-- FILL -->` and `<!-- FILL -->`.
-*Why it was hard:* `<!-- FILL -->`
-*Decided:* `<!-- FILL -->`, because `<!-- FILL: which rule you applied -->`
+**1. "Last year was his third-best shooting year of his career."**
+*Torn between:* `stat_backed` and `consensus_take`.
+*Why it was hard:* There is no raw number anywhere in it. My definition says "a specific, checkable quantity," and my instinct was that a quantity means digits. But "third-best shooting year of his career" is precisely checkable — you can look it up and be proved wrong — while a comment like "he shot well last year" cannot.
+*Decided:* `stat_backed`. **A rank is a quantity.** The load-bearing test settles it cleanly: delete the ranking and nothing is left of the claim. This forced me to stop treating "contains digits" as a proxy for the rule, which turned out to be the same shortcut I later had to check the model for.
 
-**2.** `<!-- FILL: the comment text -->`
-*Torn between:* `<!-- FILL -->` and `<!-- FILL -->`.
-*Why it was hard:* `<!-- FILL -->`
-*Decided:* `<!-- FILL -->`, because `<!-- FILL -->`
+**2. "Aww look at the baby back bitch cry after talking shit... Imagine your 'star' having a 6 point game in the NBA finals lmao."**
+*Torn between:* `stat_backed` and `hot_take`.
+*Why it was hard:* "6 point game in the NBA finals" is a real, specific, checkable number about a real performance. By a literal reading of the `stat_backed` definition it qualifies.
+*Decided:* `hot_take`, on the decorative-stat rule from [planning.md §3a](planning.md). The number isn't reasoning, it's ammunition — the comment is an insult that happens to be numerically accurate. Apply the load-bearing test properly and it fails: delete "6 point game" and the comment still says exactly the same thing with exactly the same force, because the force was never coming from the number.
 
-**3.** `<!-- FILL: the comment text -->`
-*Torn between:* `<!-- FILL -->` and `<!-- FILL -->`.
-*Why it was hard:* `<!-- FILL -->`
-*Decided:* `<!-- FILL -->`, because `<!-- FILL -->`
+**3. "I have 100% belief."**
+*Torn between:* `stat_backed` and `reaction`.
+*Why it was hard:* It contains a percentage. A naive reading of step 1 stops right there.
+*Decided:* `reaction`. "100%" is an idiom for total conviction, not a statistic — there is nothing to check. The strip test leaves nothing behind: remove the emphasis and no claim anyone could disagree with survives. This is the clearest case in the dataset that the taxonomy is about *argumentative function*, not about surface tokens, and it's the row I'd most want the model to get right.
 
 ---
 
@@ -135,13 +153,15 @@ Every class sits between 21% and 28%. No label approaches the 70-row cap from pl
 
 **Base model:** `distilbert-base-uncased` (66M parameters) — a distilled BERT that keeps most of BERT-base's language understanding at roughly 40% of the size, which makes it trainable on a free T4 in minutes.
 
-**Setup:** `<!-- FILL: epochs, learning rate, batch size, max sequence length -->`. Split 70/15/15 into train/validation/test, handled by the notebook, stratified by label.
+**Setup:** learning rate 2e-5, batch size 16, max sequence length 256, weight decay 0.01, warmup ratio 0.1, seed 42. The dataset is split 70/15/15 into train/validation/test, **stratified by label** — with only 35 test rows, an unstratified draw can easily leave a class with two or three test examples, and per-class F1 on three examples is noise rather than measurement.
 
-**Key hyperparameter decision:** `<!-- FILL -->`
+**Key hyperparameter decision: epochs are selected by validation macro-F1 rather than fixed at 3.**
 
-> *Guidance for filling this in — pick the one you actually wrestled with and say what you observed, not just what you set. The most likely candidate is **epochs**: 3 is the notebook default, but 140 training examples is tiny, and DistilBERT will typically overfit within a few epochs. If you watched validation loss turn upward while training loss kept dropping, say at which epoch and what you did about it. Second most likely is **learning rate**: 2e-5 is standard for BERT fine-tuning; if you tried 5e-5 or 3e-5 and it destabilized, that's a real finding. Delete this blockquote when you write the real answer.*
+The notebook default of 3 epochs is a guess that ignores the dataset. With ~158 training examples and batch size 16, one epoch is only 10 optimizer steps — so 3 epochs is 30 steps total, which can leave the classification head undertrained. But simply raising it to 8 overfits a set this small. Rather than pick a number blind, training runs up to 8 epochs, evaluates on the validation split after each one, and restores the checkpoint with the best validation macro-F1 (`load_best_model_at_end`), with early stopping after 3 epochs without improvement. Macro-F1 is the selection metric for the same reason it's the primary metric in [planning.md §5](planning.md): it refuses to let an easy class subsidize a hard one, whereas selecting on accuracy would happily pick a checkpoint that had given up on `stat_backed`.
 
-**Class imbalance handling:** `<!-- FILL: did you weight the loss, or leave it? If your distribution came out near-even, say so and say you didn't need to. -->`
+`<!-- PENDING: which epoch won, and what validation loss was doing at that point -->`
+
+**Class imbalance handling:** none, and none needed. The distribution spans 21.1% to 28.2%, so the loss was left unweighted; weighting a distribution this even would add a knob without addressing a real problem.
 
 ---
 
@@ -149,180 +169,91 @@ Every class sits between 21% and 28%. No label approaches the 70-row cap from pl
 
 Zero-shot classification with `meta-llama/llama-4-scout-17b-16e-instruct` via Groq, no task-specific training, scored on the **identical test set** as the fine-tuned model.
 
+The prompt carries the label definitions and the ordered decision procedure verbatim from planning.md — the baseline gets the same rules the human annotator used, so the comparison measures learning rather than who was told more.
+
 **Prompt used:**
 
 ```text
-<!-- FILL: paste your exact Groq prompt here, verbatim -->
+You are classifying comments from r/NBA by WHAT KIND OF SUPPORT the take offers.
+
+Apply this decision procedure IN ORDER and stop at the first match:
+
+1. Does the comment cite a specific, checkable number (a stat line, percentage, rank, split,
+   record, or dated comparison) that does real argumentative work?
+   Test: delete the number. If the argument gets weaker, the number was load-bearing.
+   If the identical assertion remains with identical force, the number was decorative -
+   do NOT stop here, continue to step 2.
+   -> stat_backed
+
+2. Otherwise, does it assert an evaluative claim?
+   Test: imagine a reply saying "yeah, obviously."
+   - Reads as normal, because r/NBA broadly agrees -> consensus_take
+   - Reads as sarcastic, because the claim runs against r/NBA consensus -> hot_take
+   Consensus means r/NBA consensus, NOT national NBA media consensus. When they disagree,
+   r/NBA wins.
+
+3. No evaluative claim survives stripping the emotion (caps, emoji, exclamations, jokes,
+   chants like "MVP! MVP!").
+   -> reaction
+
+Order matters: a contrarian comment that brings real load-bearing numbers is stat_backed,
+not hot_take. Evidence outranks alignment.
+
+Respond with EXACTLY ONE of these four words and nothing else:
+stat_backed
+consensus_take
+hot_take
+reaction
 ```
 
-**Collection method:** each test comment sent as a separate request, temperature `<!-- FILL -->`, model instructed to output only the bare label name. Unparseable responses: `<!-- FILL: N -->` of `<!-- FILL: N -->` (`<!-- FILL -->`%).
+**Collection method:** each test comment sent as a separate request at temperature 0, with the prompt above as the system message and the bare comment as the user message, capped at 10 output tokens. Responses are parsed by exact token match first, then substring. **Unparseable responses are scored as wrong rather than dropped** — silently dropping them would flatter the baseline by removing exactly the cases it handled worst.
 
-**Prediction I recorded before running anything** (in [planning.md §5](planning.md)): I expected the zero-shot LLM to *beat* DistilBERT on the `consensus_take` / `hot_take` boundary, because that boundary requires knowing what NBA fans believe — world knowledge a 17B internet-trained model has and a 66M DistilBERT fine-tuned on 140 examples does not. I expected DistilBERT to win on `reaction` and `stat_backed`, where the signal is lexical and learnable from few examples.
+**Prediction recorded before running anything** (in [planning.md §5](planning.md)): I expected the zero-shot LLM to *beat* DistilBERT on the `consensus_take` / `hot_take` boundary, because that boundary requires knowing what NBA fans believe — world knowledge a 17B internet-trained model has and a 66M DistilBERT fine-tuned on ~158 examples does not. I expected DistilBERT to win on `reaction` and `stat_backed`, where the signal is lexical and learnable from few examples.
 
-**What actually happened:** `<!-- FILL: was the prediction right? Say so plainly either way — a wrong prediction you recorded in advance is a better result than a vague one you didn't. -->`
+`<!-- PENDING: was the prediction right -->`
 
 ---
 
 ## Evaluation report
 
-### Headline comparison
-
-| Metric | Zero-shot Llama-4-Scout | Fine-tuned DistilBERT |
-|---|---|---|
-| Accuracy | `<!-- FILL -->` | `<!-- FILL -->` |
-| Macro-F1 | `<!-- FILL -->` | `<!-- FILL -->` |
-| Weighted F1 | `<!-- FILL -->` | `<!-- FILL -->` |
-
-Random-chance accuracy on four classes is 0.25. Always-predict-the-largest-class is roughly `<!-- FILL -->`.
-
-**Test set is 30 comments — about 7 or 8 per class.** Every per-class number below moves by roughly 0.14 per single example. They are directional, not precise, and the confusion matrix plus the actual error text carry more weight here than any decimal place.
-
-### Per-class metrics
-
-**Zero-shot Llama-4-Scout**
-
-| Label | Precision | Recall | F1 | Support |
-|---|---|---|---|---|
-| `stat_backed` | | | | |
-| `consensus_take` | | | | |
-| `hot_take` | | | | |
-| `reaction` | | | | |
-
-**Fine-tuned DistilBERT**
-
-| Label | Precision | Recall | F1 | Support |
-|---|---|---|---|---|
-| `stat_backed` | | | | |
-| `consensus_take` | | | | |
-| `hot_take` | | | | |
-| `reaction` | | | | |
-
-### Confusion matrix — fine-tuned DistilBERT
-
-Rows are true labels, columns are predictions. Supplementary image: [`confusion_matrix.png`](confusion_matrix.png)
-
-| True \ Predicted | `stat_backed` | `consensus_take` | `hot_take` | `reaction` |
-|---|---|---|---|---|
-| **`stat_backed`** | | | | |
-| **`consensus_take`** | | | | |
-| **`hot_take`** | | | | |
-| **`reaction`** | | | | |
-
-`<!-- FILL: 2–3 sentences reading the matrix. Which off-diagonal cell is largest? Is the confusion directional — does one label absorb the other, or do they trade errors symmetrically? Direction is the informative part. -->`
-
-### Three wrong predictions, analyzed
-
-**1.** `<!-- FILL: comment text -->`
-True: `<!-- FILL -->` · Predicted: `<!-- FILL -->` · Confidence: `<!-- FILL -->`
-`<!-- FILL: Why did it fail? Work through the four guiding questions — which boundary is this, why is that boundary hard, is it a labeling problem or a data problem, what would fix it. "The model got it wrong" is not analysis. -->`
-
-**2.** `<!-- FILL: comment text -->`
-True: `<!-- FILL -->` · Predicted: `<!-- FILL -->` · Confidence: `<!-- FILL -->`
-`<!-- FILL -->`
-
-**3.** `<!-- FILL: comment text -->`
-True: `<!-- FILL -->` · Predicted: `<!-- FILL -->` · Confidence: `<!-- FILL -->`
-`<!-- FILL -->`
-
-### Systematic error patterns
-
-`<!-- FILL: What holds across the errors rather than within one? Hypotheses worth testing, stated in planning.md §7c before I looked:
-     - Are errors concentrated in short comments (<15 words)?
-     - Is consensus_take ↔ hot_take confusion directional?
-     - Do errors cluster by player name — did the model learn "Jokic comments are positive" as a topic shortcut?
-     - Does any digit push toward stat_backed regardless of whether the number is load-bearing?
-     Report the patterns you confirmed AND the ones you tested and rejected. A rejected hypothesis is evidence too.
-     Critically: check each pattern against the CORRECTLY classified examples. A pattern equally present in the
-     successes doesn't explain the failures — that's the specific way this analysis goes wrong. -->`
-
-### Sample classifications
-
-Five comments run through the fine-tuned model:
-
-| # | Comment | Predicted | Confidence | Correct? |
-|---|---|---|---|---|
-| 1 | | | | |
-| 2 | | | | |
-| 3 | | | | |
-| 4 | | | | |
-| 5 | | | | |
-
-**Why #`<!-- FILL -->` is a reasonable prediction:** `<!-- FILL: one or two sentences on what in the text the model plausibly keyed on, and why that lines up with the label definition rather than with a surface shortcut. -->`
-
----
-
-## Reflection: what the model learned vs. what I intended
-
-`<!-- FILL: This is the highest-value section in the report and it is NOT a list of wrong predictions — it's the gap between your definitions and the model's actual decision boundary.
-
-Some framing to push against, using your own taxonomy:
-
-INTENDED for stat_backed: "a number that does argumentative work" — the load-bearing test.
-PLAUSIBLY LEARNED: "contains digits, or contains stat vocabulary like TS%/per-100." Check this directly: find a
-decorative-stat comment you labeled hot_take and see what the model predicted. If it says stat_backed with high
-confidence, the model learned the surface tell and skipped the rule entirely — which means the single most
-interesting distinction in the taxonomy was never actually transmitted.
-
-INTENDED for consensus_take vs. hot_take: alignment with community belief.
-PLAUSIBLY LEARNED: sentiment, or hedging language, or just "which players are mentioned." If hot_take predictions
-track negative sentiment about any player, the model learned a sentiment classifier wearing your taxonomy's
-clothes — it would call a negative-but-orthodox take a hot_take and a positive-but-contrarian take a consensus_take.
-That's a specific, checkable claim. Check it.
-
-INTENDED for reaction: no claim survives the strip test.
-PLAUSIBLY LEARNED: caps, emoji, and short length. Test with a long, calm, claim-free comment and with a
-short, all-caps comment that does contain a real claim.
-
-Also address what the model MISSED, not just what it substituted. And be honest about the possibility that
-consensus_take and hot_take collapsed into one undifferentiated "unsupported opinion" category from the model's
-point of view — if the confusion matrix shows them trading errors heavily in both directions, that's what happened,
-and it's a genuine finding about whether 200 examples can transmit world knowledge. -->`
+`<!-- PENDING: this entire section is generated from evaluation_results.json and
+     test_predictions.csv once the Colab notebook has been run. It will contain:
+       - headline accuracy / macro-F1 / weighted-F1 for both models
+       - per-class precision, recall, F1, support for both models
+       - the confusion matrix as a markdown table
+       - three wrong predictions analyzed against the four guiding questions
+       - a sample-classifications table with confidences
+       - systematic error patterns, confirmed and rejected
+       - confidence calibration
+       - the success-tier table from planning.md §6
+       - reflection on what the model learned vs. what I intended -->`
 
 ---
 
 ## Spec reflection
 
-**One way the spec helped:** `<!-- FILL -->`
+**One way the spec helped.** Requiring the data-collection plan *in writing before collecting* is what caught the calendar problem. Writing out "game threads → `reaction`, post-game threads → `stat_backed`" forced me to check whether those threads existed, and they didn't — collection fell in late September, before the Oct 3 preseason, so r/NBA had no game threads at all. Had I started collecting first and planned afterward, I'd have discovered this with a half-built dataset drawn from whatever the offseason happened to offer, and the `consensus_take` frame would have drifted across it. Instead the whole window moved into the 2025 playoff archive, which fixed the problem and made the taxonomy *more* coherent than the original plan, because every label is now judged against one frozen moment in r/NBA's beliefs.
 
-**One way the implementation diverged from it, and why:** `<!-- FILL: Be specific and honest. Divergence is expected and saying "it didn't" reads as not having noticed. Likely candidates: a label definition you had to sharpen mid-annotation; the stratified-rather-than-random sampling decision; a hyperparameter you changed off the notebook default; the AI-pre-labeling decision if you reversed it. -->`
+**One way the implementation diverged, and why.** planning.md §7b committed explicitly to hand-labeling all 200 examples with no LLM pre-labeling, and gave a real reason: the `consensus_take`/`hot_take` boundary is a judgment about community norms that should be mine, and seeding it from the same class of model the baseline is testing contaminates the comparison. **That commitment was reversed.** The dataset was assembled and labeled in a single machine pass, and my involvement became review rather than authorship — which then produced a 0% override rate, the exact symptom §7b was written to detect.
+
+The honest accounting is that the reversal traded annotation integrity for speed, and the cost is real: the ground truth for the hardest boundary is partly a machine's read on what r/NBA believes, and the zero-shot baseline is another machine's read on the same question, so that comparison measures inter-model agreement more than I'd like. I kept both the original refusal and the reversal in planning.md rather than quietly editing the plan to match what I did, because the reasoning for the refusal is precisely what makes the reversal a risk worth flagging. The inter-annotator check exists to put an independent number on how much damage it did.
 
 ---
 
 ## AI usage
 
-**1. Label stress-testing (before annotation).** I gave Claude the four label definitions and the ordered decision procedure and asked it to generate 10 r/NBA-style comments engineered to sit exactly on the boundaries. I labeled all 10 myself using only the written rules. `<!-- FILL: what came back, which ones you couldn't resolve from the rules alone, and what you changed in the definitions as a result. If nothing broke, say that — but say which cases you tested. -->` None of these generated comments entered the dataset; synthetic LLM-written comments have a different texture from real ones and would have taught the model the wrong distribution.
+**1. Label stress-testing, before annotation.** I gave Claude (Opus) the four label definitions, the ordered decision procedure, and all four edge-case rules from planning.md §3, and asked it to generate 10 r/NBA-style comments engineered to sit exactly on the boundaries — five on `consensus_take`/`hot_take`, three decorative-stat cases, two embedded-claim cases. I then labeled all 10 myself using only the written rules. Output is in [`label-stress-test.md`](label-stress-test.md). None of these generated comments entered the dataset; synthetic LLM-written comments have a different texture from real ones and would teach the model the wrong distribution.
 
-**2. Failure analysis (after evaluation).** I gave Claude the full list of misclassified test examples with true labels, predicted labels, and confidences, and asked it to propose *systematic* patterns rather than explain individual errors. `<!-- FILL: what it proposed, which patterns you confirmed by re-reading the examples, and — importantly — which you rejected and why. Note anything you had to override. -->` I verified each proposed pattern against the correctly-classified examples as well, since a pattern equally present in the successes doesn't explain the failures.
-
-**3. Repo and document scaffolding.** I used Claude to draft the structure of this README and of `planning.md`, and to pressure-test the label taxonomy during design — including talking me out of `<!-- FILL: e.g. an earlier label pair, or the 4-labels-at-200-examples sizing question -->`. `<!-- FILL: what you overrode or rewrote. -->`
-
-**4. Dataset assembly and pre-labeling — the big one.** I directed Claude to collect r/NBA comments from an archived window through the Arctic Shift API and assemble them into the labeled CSV. It produced 204 verbatim comments with a proposed label and an edge-case note on each. Two things I overrode during that process, both worth recording:
+**2. Dataset assembly and pre-labeling — the significant one.** I directed Claude to collect r/NBA comments from the archived window through the Arctic Shift API and assemble them into the labeled CSV with a proposed label and an edge-case note on each row. Two things I overrode, both worth recording:
 
 - It initially included two rows that were **its own invented examples from `planning.md`**, not collected comments — precisely the synthetic-data contamination §7a had ruled out. Both were removed. The lesson generalizes: when the same tool writes your examples and collects your data, verify that they stayed separate.
-- The first assembly came out at 239 rows with `reaction` at 36%, over the 70-row cap I'd set. Trimmed to 204 by dropping the lowest-signal reaction rows (one-to-three-word comments like "Money" and "google it"), which fixed the distribution and removed the noisiest training data in the same move.
+- The first assembly came out at 239 rows with `reaction` at 36%, over the cap I'd set. Trimmed to 204 by dropping the lowest-signal reaction rows — one-to-three-word comments like "Money" and "google it" — which fixed the distribution and removed the noisiest training data in the same move. `stat_backed` was later topped up to clear the 20% floor, bringing the total to 227.
 
-**Annotation disclosure — the original plan was reversed.** [planning.md §7b](planning.md) committed to no LLM pre-labeling, for reasons I still think are right. In practice **every label in the committed CSV is machine-proposed** (`pre_labeled=proposed` on all 204 rows) and awaits human review. Keeping both the original refusal and the reversal in the document is deliberate: the reasoning for the refusal is exactly what makes the reversal a risk worth flagging rather than a detail to bury.
+**Annotation disclosure.** Every label in the committed CSV originated as a machine proposal (`proposed_label` column), and my pass over them produced 0 overrides out of 227. The full reasoning, and why I'm reporting that number rather than explaining it away, is in the labeling-process section above.
 
----
+**3. Tooling.** I directed Claude to build [`tools/review_labels.py`](tools/review_labels.py) (the review interface and its blind second-annotator mode), [`tools/takemeter_app.py`](tools/takemeter_app.py), and [`takemeter_colab.ipynb`](takemeter_colab.ipynb). Two corrections I made to what it produced: the first version of the review tool accepted auto-repeat keystrokes, which meant holding Enter could stamp the entire dataset as reviewed in about a minute — it now ignores repeated keydown events, because a held key is not a judgment about a comment. I also had it add a hard gate in the notebook that refuses to train while any row is still marked `proposed`, rather than relying on my remembering to check.
 
-## Did it hit the success criteria?
-
-Thresholds were set in [planning.md §6](planning.md) *before* any results existed.
-
-| Tier | Criterion | Target | Actual | Met? |
-|---|---|---|---|---|
-| 1 — learned something | Accuracy | ≥ 0.50 | | |
-| 1 | Macro-F1 | ≥ 0.45 | | |
-| 1 | No class with F1 = 0 | — | | |
-| 1 | Beats baseline on macro-F1 | — | | |
-| 2 — genuinely useful | Accuracy | ≥ 0.70 | | |
-| 2 | Macro-F1 | ≥ 0.65 | | |
-| 2 | Every per-class F1 | ≥ 0.55 | | |
-| 2 | `consensus_take`↔`hot_take` < half of all errors | — | | |
-| 3 — deployable | `stat_backed` precision | ≥ 0.80 | | |
-| 3 | `stat_backed` recall | ≥ 0.50 | | |
-
-`<!-- FILL: 2–3 sentences. Which tier did you actually reach? If you missed Tier 2, say so plainly — a missed threshold you set in advance and reported honestly is worth more than a threshold quietly lowered to match the result. -->`
+**4. Failure analysis, after evaluation.** `<!-- PENDING: what Claude proposed, which patterns I confirmed by re-reading, which I rejected and why -->`
 
 ---
 
@@ -330,8 +261,14 @@ Thresholds were set in [planning.md §6](planning.md) *before* any results exist
 
 | Path | What it is |
 |---|---|
-| [`planning.md`](planning.md) | Design doc, written before collection |
+| [`planning.md`](planning.md) | Design doc, written before collection; stretch features planned in §8 |
 | [`annotation-guide.md`](annotation-guide.md) | One-page decision procedure used while labeling |
-| [`data/takemeter_labeled.csv`](data/takemeter_labeled.csv) | All 200 labeled examples, unsplit |
+| [`label-stress-test.md`](label-stress-test.md) | Boundary cases generated to test the definitions before annotating |
+| [`data/takemeter_labeled.csv`](data/takemeter_labeled.csv) | All 227 labeled examples, unsplit |
+| [`takemeter_colab.ipynb`](takemeter_colab.ipynb) | Full pipeline: split, train, baseline, evaluate, calibrate, export |
+| [`tools/collect_reddit.py`](tools/collect_reddit.py) | Arctic Shift collection script |
+| [`tools/review_labels.py`](tools/review_labels.py) | Label review interface; `--mode blind` for the second annotator |
+| [`tools/takemeter_app.py`](tools/takemeter_app.py) | Local interface: paste a comment, get label and confidence |
 | `evaluation_results.json` | Metrics exported from the notebook |
-| `confusion_matrix.png` | Supplementary image of the matrix above |
+| `test_predictions.csv` | Every test comment with both models' predictions and confidence |
+| `confusion_matrix.png` | Supplementary image of the matrix |
