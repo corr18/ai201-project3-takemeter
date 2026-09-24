@@ -36,7 +36,7 @@ Four labels, ordered by what kind of support the comment offers for what it clai
 
 *Uncertain case:* "LeBron is overrated, his playoff record against 1-seeds is under .500." One real number, but it's cherry-picked and the framing is accusatory — see the decorative-stat rule in §3.
 
-### `consensus_take
+### `consensus_take`
 
 **Definition:** The comment asserts an evaluative claim with no statistical support, and the claim is one r/NBA broadly agrees with — the kind of comment that draws "yeah, obviously" replies and upvotes rather than argument.
 
@@ -228,14 +228,18 @@ The concrete deployment I have in mind is a "receipts" sidebar on a long r/NBA t
 
 ### 7b. Annotation assistance — *DECISION REVERSED: every label in the current CSV was machine-proposed*
 
-> **Status: the plan below was overtaken by events, and the record of both states is kept deliberately.** The original decision was no pre-labeling, for the reasons still set out beneath this box. In practice the dataset was assembled and labeled in one pass by Claude (Opus), which means **all 204 rows carry a proposed label that has not yet been confirmed by a human.** Every row is marked `pre_labeled=proposed` in the CSV. None are `accepted` or `overridden` yet, because no human review pass has happened.
+> **Status: the plan below was overtaken by events, and the record of both states is kept deliberately.** The original decision was no pre-labeling, for the reasons still set out beneath this box. In practice the dataset was assembled and labeled in one pass by Claude (Opus), which means **all 204 rows as of that moment carry a proposed label that has not yet been confirmed by a human** (the set was later topped up to 227 to clear the 20% floor on `stat_backed`). Every row is marked `pre_labeled=proposed` in the CSV. None are `accepted` or `overridden` yet, because no human review pass has happened.
 >
 > **This is not a finished dataset and must not be trained on as-is.** Two separate reasons:
 >
 > 1. **Academic.** The annotation is the graded intellectual work of this project. A model trained on machine labels measures the machine's taxonomy, not mine.
 > 2. **Methodological, and the more interesting one.** The `consensus_take` / `hot_take` boundary is defined as *alignment with what r/NBA believed at the time*. An LLM's read on that is a guess about community belief, and it is the **same class of judgment the zero-shot baseline is being tested on**. If the ground truth is machine-proposed and the baseline is machine-produced, the baseline comparison partly measures agreement between two LLMs rather than task difficulty — the exact contamination the original decision was written to avoid.
 >
-> **Required next step:** review all 204 rows against §2 and §3, flipping each to `accepted` or `overridden`. The accepted-vs-overridden split then does the work the tracking column was designed for: if the override rate is very low, that is evidence of rubber-stamping rather than evidence the proposals were good, and it needs to be reported as such.
+> **Required next step:** review every row against §2 and §3, flipping each to `accepted` or `overridden`. The accepted-vs-overridden split then does the work the tracking column was designed for: if the override rate is very low, that is evidence of rubber-stamping rather than evidence the proposals were good, and it needs to be reported as such.
+
+> **Update — the review pass is complete, and the override rate is 0%.** All 227 rows now read `accepted`; none were overridden. That number needs its context stated rather than buried, because the paragraph directly above pre-registered a near-zero override rate as a warning sign. What happened: I had already read the proposed labels before the review tool existed, and formed my own judgement on them at that point. The pass in the tool was therefore a *confirmation* of judgements already made, not a first reading, which is why it ran quickly. I agreed with the machine proposal on every row.
+>
+> I am recording the rate rather than explaining it away, because the two readings are not distinguishable from the artifact alone. A reader who wants to discount the review has the number they need to do so, and the inter-annotator check in §8a is the independent evidence that speaks to label quality without relying on my account of my own process.
 
 *Original decision, retained for the record:*
 
@@ -247,7 +251,7 @@ I will label all 200 by hand.
 
 - **Tool:** Claude (Opus), the same model used for stress-testing, so the disclosure names one tool rather than a vague "an LLM."
 - **Row-level tracking:** add a `pre_labeled` column to the CSV with values `no` (default, hand-labeled from scratch), `accepted` (LLM proposed a label and I agreed), or `overridden` (LLM proposed a label and I changed it). A plain flag isn't enough — the accepted/overridden split is what lets me *measure* the anchoring risk instead of just asserting it's low. If my override rate on pre-labeled rows is far below my hesitation rate on hand-labeled rows, that's evidence I was rubber-stamping, and it's visible in the data rather than hidden.
-- **Reporting:** the counts for each value go in the README's AI usage section, and I update §7b and the §8 revision log before labeling a single pre-labeled row.
+- **Reporting:** the counts for each value go in the README's AI usage section, and I update §7b and the §9 revision log before labeling a single pre-labeled row.
 
 ~~Because the decision is *no*, the CSV ships with four columns and no `pre_labeled` column. Its absence is itself the disclosure: every row was labeled by hand.~~ **Superseded.** The CSV ships with five columns — `text`, `label`, `notes`, `source_thread_type`, `pre_labeled` — and every row currently reads `proposed`.
 
@@ -265,7 +269,45 @@ I will label all 200 by hand.
 
 ---
 
-## 8. Revision log
+## 8. Stretch features — planned before starting
+
+*(The assignment requires updating this document before beginning each stretch feature. These four plans were written before any of the corresponding work started.)*
+
+### 8a. Inter-annotator reliability
+
+**Why this one first.** Given the 0% override rate in §7b, an independent second annotator is the only evidence about label quality that does not depend on my own account of my own process. If a second person applying the same written rules lands where I did, the taxonomy transmits; if they scatter, the definitions are doing less work than I think and the model's ceiling is my annotation noise.
+
+**Method.** A blind mode in [`tools/review_labels.py`](tools/review_labels.py) serves a stratified 40-row sample — 10 per label, seeded so it is reproducible — with **the existing label hidden**. The second annotator sees only the comment and the four definitions, and labels from scratch. Their decisions are written to a separate file, `data/annotator2_labels.csv`; the main dataset is never touched by that mode.
+
+**What I will report.** Cohen's kappa and raw percentage agreement. Kappa matters more than the percentage here because four roughly balanced classes give a chance-agreement floor near 25%, so a raw 60% agreement sounds respectable while being close to worthless. Interpretation bands I am committing to now so I cannot pick flattering ones later: κ < 0.40 means the boundary is mostly in my head and the labels are not reproducible; 0.40–0.60 is moderate and roughly what I expect for a subjective four-way task; above 0.60 is substantial and would mean the written rules genuinely transmit.
+
+**What I expect.** Disagreement should concentrate almost entirely on `consensus_take` vs. `hot_take`, since that boundary requires a shared model of what r/NBA believes, and a second annotator who is not a regular there has no reason to share mine. I expect near-total agreement on `reaction`. If disagreement instead lands on `stat_backed`, the load-bearing test in §3a is written worse than I think.
+
+### 8b. Confidence calibration
+
+**Question.** Does a 90%-confident prediction actually get it right more often than a 60%-confident one? A classifier whose confidence is uninformative cannot be deployed behind a threshold, which is exactly how the §6 Tier 3 "receipts sidebar" would have to work.
+
+**Method.** Softmax maximum as the confidence score, test predictions bucketed at <50 / 50–70 / 70–85 / 85–95 / >95, with accuracy computed inside each bucket. Alongside the buckets I will report **expected calibration error** — the size-weighted average gap between confidence and accuracy — plus mean confidence on correct versus wrong predictions.
+
+**Caveat I am stating in advance.** With roughly 34 test examples the buckets will hold single digits each, so the per-bucket accuracies are indicative and not reliable estimates. ECE and the correct-vs-wrong confidence gap are the more trustworthy numbers at this sample size, and the honest finding may simply be "the test set is too small to establish calibration," which I will report as such rather than over-reading four buckets of five.
+
+**Prior.** Fine-tuned transformers on small datasets are characteristically overconfident, so I expect mean confidence to sit meaningfully above accuracy.
+
+### 8c. Error pattern analysis
+
+This extends the §7c plan from listing individual errors to establishing a *systematic* pattern. The four hypotheses in §7c are the ones I will test — short comments, directional `consensus_take` ↔ `hot_take` confusion, player-name topic shortcuts, and any-digit-means-`stat_backed`.
+
+**The methodological rule that makes this worth doing:** every candidate pattern gets checked against the **correctly classified** examples too. A property shared by the errors and the successes alike explains nothing, and that is the specific way this analysis fails — a confident narrative about six errors always sounds right. Patterns I test and reject go in the README next to the ones I keep. I will also use the `source_thread_type` column to check whether errors cluster by collection source, which would indicate the sampling artifact flagged in §4 rather than a modeling failure.
+
+### 8d. Deployed interface
+
+**What.** A local web app — [`tools/takemeter_app.py`](tools/takemeter_app.py) — that accepts a pasted comment, runs the fine-tuned model, and shows the predicted label with confidence across all four labels, not just the winner. Showing the full distribution is the deliberate choice: a 0.38 / 0.35 split between `consensus_take` and `hot_take` is a visibly different situation from 0.95 / 0.02, and collapsing both to "the answer" would hide exactly the boundary this project is about.
+
+**Where.** Serving is Python-stdlib only, so the sole dependency is the model runtime. A Gradio version in the notebook provides a public URL for the demo video; the committed script is the runnable artifact.
+
+---
+
+## 9. Revision log
 
 | Date | Change |
 |---|---|
@@ -275,5 +317,8 @@ I will label all 200 by hand.
 | *(during collection)* | §4: superseded the above — moved the entire window into the archive (2025 playoffs, Apr 19–Jun 25 2025) via the Arctic Shift API, so no exception to §3b is needed and thread-type variety is restored. Documented the query-stratification sampling artifact affecting `stat_backed`. |
 | *(during collection)* | §7b: **decision reversed.** All 204 rows were machine-labeled by Claude in the same pass that assembled them, and are marked `pre_labeled=proposed`. Human review pass is outstanding; the dataset must not be trained on until it is done. |
 | *(during collection)* | §6: added a fourth failure mode to the >0.95 red-flag list — machine-labeled ground truth makes an inflated score substantially more likely, since the labels carry one model's consistent decision boundary rather than a human's noisier one. |
+| *(after collection)* | §7b: review pass completed in [`tools/review_labels.py`](tools/review_labels.py). 227/227 rows confirmed, 0 overridden. The 0% rate and the reason for it are recorded in §7b rather than explained away. |
+| *(before stretch work)* | Added §8 with plans for all four stretch features — inter-annotator reliability, confidence calibration, error pattern analysis, deployed interface — including the kappa interpretation bands and the calibration sample-size caveat, both committed before seeing any result. |
+| *(before stretch work)* | §2: fixed an unterminated code span in the `consensus_take` heading. No change to the definition. |
 
 *(Per the assignment, this document gets updated before starting any stretch feature. Log those updates here.)*
