@@ -78,21 +78,35 @@ Three supporting tests do the actual work at the boundaries:
 | Daily Discussion Thread | `consensus_take`, `hot_take` | Low-stakes opinion trading with no game anchoring it |
 | News / `[Highlight]` comments | `hot_take` | Player-evaluation arguments, where contrarian takes live |
 
-**Timing note:** collection happened before the Oct 3 preseason, so r/NBA had no game or post-game threads — the two sources the table above assigns to `reaction` and `stat_backed`. `consensus_take`, `hot_take`, and `stat_backed` were re-sourced to the current offseason window (media days, roster moves, season-preview rankings), which is if anything *more* argument-dense than a game thread, since offseason discourse is nothing but player evaluation with no game to point at. `reaction` was pulled from a narrow archived window instead. That exception is scoped deliberately: the frozen-window rule in [planning.md §3b](planning.md) exists only to stabilize the `consensus_take` / `hot_take` boundary, and `reaction` carries no claim by definition, so it has no consensus to drift against. Archived rows carrying an actual claim were discarded rather than labeled.
+**Collection window: the 2025 NBA playoffs, April 19 – June 25, 2025**, ending with Thunder–Pacers Game 7 on June 22. The original plan assumed a live in-season window, but collection happened in late September, before the Oct 3 preseason — r/NBA had no game or post-game threads at all. Rather than patch around that, the whole window moved into the archive. That turned out cleaner: one frozen window means one consensus frame for every label, which is exactly what the drifting-consensus rule in [planning.md §3b](planning.md) asks for, and the archive still contains the full range of thread types the table above depends on.
 
-**Method:** comments pulled unlabeled via [`tools/collect_reddit.py`](tools/collect_reddit.py), then every row read and labeled by hand against the §2/§3 rules. The script removed the copy-paste, not the read. No LLM pre-labeling — see [AI usage](#ai-usage) for why that was a deliberate refusal rather than an oversight.
+**Source:** the [Arctic Shift](https://arctic-shift.photon-reddit.com) public API rather than reddit.com directly, via [`tools/collect_reddit.py`](tools/collect_reddit.py). Arctic Shift serves historical Reddit data, which is what makes an archived window practical.
+
+**Sampling artifact worth stating plainly.** `stat_backed` is rare enough that date-window sampling alone barely produced it, so those rows were pulled with full-text queries for stat vocabulary (`averaged`, `shooting`). That means the class was *selected for containing stat words*, which inflates the link between stat vocabulary and the label beyond what natural r/NBA traffic would show. If the model ends up keying on digits and the word "averaged," this collection method is part of the cause, not purely a modeling failure. The `source_thread_type` column marks query-sourced rows (`stat_search`, `take_search`) separately from date-window rows (`finals_g7_live`, `finals_g1_live`, `finals_g7_aftermath`, `playoffs_general`) so the effect can be measured instead of guessed at.
+
+> ### ⚠️ Labels in the committed CSV are machine-proposed and awaiting review
+>
+> All 204 rows were assembled *and labeled* in one pass by Claude (Opus), and every row is marked `pre_labeled=proposed`. **No human review pass has happened yet, and the dataset should not be trained on until it has.** Beyond the fact that annotation is the graded work here, there's a methodological reason: the `consensus_take` / `hot_take` boundary is defined as alignment with what r/NBA believed at the time, and an LLM's read on that is the *same class of judgment the zero-shot baseline is being tested on*. Machine ground truth plus a machine baseline measures agreement between two models as much as it measures task difficulty. Review flips each row to `accepted` or `overridden`; the split between those two is then reportable evidence about how much the proposals were actually scrutinized. Full reasoning in [planning.md §7b](planning.md).
 
 **Sampling is stratified, not random — and this matters for reading the results.** Uniform sampling of r/NBA would return roughly 70% `reaction` and under 5% `stat_backed`, producing a model that predicts `reaction` constantly and looks 70% accurate while having learned nothing. So I collected from each thread type until its dominant label hit quota, then switched. The consequence: **test-set accuracy here is not an estimate of accuracy on live r/NBA traffic.** It's accuracy on a deliberately balanced sample. That's the right trade for learning boundaries, but it's a real limitation.
 
 ### Label distribution
 
-| Label | Count | Share |
-|---|---|---|
-| `stat_backed` | `<!-- FILL -->` | `<!-- FILL -->`% |
-| `consensus_take` | `<!-- FILL -->` | `<!-- FILL -->`% |
-| `hot_take` | `<!-- FILL -->` | `<!-- FILL -->`% |
-| `reaction` | `<!-- FILL -->` | `<!-- FILL -->`% |
-| **Total** | **`<!-- FILL -->`** | 100% |
+*(Machine-proposed — will shift after the human review pass.)*
+
+| Label | Count | Share | Mean words |
+|---|---|---|---|
+| `stat_backed` | 35 | 17.2% | 41.6 |
+| `consensus_take` | 60 | 29.4% | 36.4 |
+| `hot_take` | 53 | 26.0% | 29.6 |
+| `reaction` | 56 | 27.5% | 11.0 |
+| **Total** | **204** | 100% | — |
+
+No label exceeds the 70-row cap from planning.md, and the validator reports zero near-duplicates — important, because a duplicate straddling the 70/15/15 split would inflate test accuracy invisibly.
+
+**`stat_backed` is under quota at 17.2%**, against a 25% target and a 20% floor. It's genuinely the scarce class on r/NBA, and collection hit API rate limits before it could be topped up. The escalation path in [planning.md §4](planning.md) is to run more stat-vocabulary queries (`efficiency`, `rebounds`, `splits`) through `collect_reddit.py` and merge them in. Until then, `stat_backed` metrics rest on the fewest examples of any class and should be read with that in mind.
+
+**The length gap is a live leakage risk.** `reaction` averages 11 words; `stat_backed` averages 42. A model can get a long way on length alone without ever learning the load-bearing test, so this gets checked explicitly in the reflection section rather than assumed away.
 
 ### Three examples that were genuinely hard to label
 
@@ -280,7 +294,12 @@ and it's a genuine finding about whether 200 examples can transmit world knowled
 
 **3. Repo and document scaffolding.** I used Claude to draft the structure of this README and of `planning.md`, and to pressure-test the label taxonomy during design — including talking me out of `<!-- FILL: e.g. an earlier label pair, or the 4-labels-at-200-examples sizing question -->`. `<!-- FILL: what you overrode or rewrote. -->`
 
-**Annotation disclosure:** **No LLM pre-labeling was used.** All 200 examples were labeled by hand. This was a deliberate refusal, not an oversight — the `consensus_take` / `hot_take` boundary is the entire intellectual content of the project, and an LLM's suggested label would have anchored my judgment in a way I couldn't measure. Since the baseline comparison is literally "can a zero-shot LLM do this," letting the same class of model seed my ground truth would have contaminated the comparison.
+**4. Dataset assembly and pre-labeling — the big one.** I directed Claude to collect r/NBA comments from an archived window through the Arctic Shift API and assemble them into the labeled CSV. It produced 204 verbatim comments with a proposed label and an edge-case note on each. Two things I overrode during that process, both worth recording:
+
+- It initially included two rows that were **its own invented examples from `planning.md`**, not collected comments — precisely the synthetic-data contamination §7a had ruled out. Both were removed. The lesson generalizes: when the same tool writes your examples and collects your data, verify that they stayed separate.
+- The first assembly came out at 239 rows with `reaction` at 36%, over the 70-row cap I'd set. Trimmed to 204 by dropping the lowest-signal reaction rows (one-to-three-word comments like "Money" and "google it"), which fixed the distribution and removed the noisiest training data in the same move.
+
+**Annotation disclosure — the original plan was reversed.** [planning.md §7b](planning.md) committed to no LLM pre-labeling, for reasons I still think are right. In practice **every label in the committed CSV is machine-proposed** (`pre_labeled=proposed` on all 204 rows) and awaits human review. Keeping both the original refusal and the reversal in the document is deliberate: the reasoning for the refusal is exactly what makes the reversal a risk worth flagging rather than a detail to bury.
 
 ---
 
